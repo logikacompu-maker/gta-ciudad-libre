@@ -1,0 +1,67 @@
+
+name: Crear APK Android
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.3.0
+
+    steps:
+      - name: Descargar proyecto
+        uses: actions/checkout@v4
+
+      - name: Preparar archivos
+        run: |
+          mkdir -p extracted build
+          unzip -q CiudadLibre_Proyecto_v02.zip -d extracted
+          PROJECT_FILE=$(find extracted -name project.godot | head -n 1)
+          PROJECT_DIR=$(dirname "$PROJECT_FILE")
+          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
+
+      - name: Configurar exportación Android
+        run: |
+          cat > "$PROJECT_DIR/export_presets.cfg" <<'EOF'
+          [preset.0]
+          name="Android"
+          platform="Android"
+          runnable=true
+          dedicated_server=false
+          custom_features=""
+          export_filter="all_resources"
+          include_filter=""
+          exclude_filter=""
+          export_path="build/CiudadLibre.apk"
+          encryption_include_filters=""
+          encryption_exclude_filters=""
+          encrypt_pck=false
+          encrypt_directory=false
+
+          [preset.0.options]
+          custom_template/debug=""
+          custom_template/release=""
+          package/unique_name="com.ciudadlibre.game"
+          package/name="Ciudad Libre"
+          version/code=1
+          version/name="1.0"
+          EOF
+          mkdir -p "$PROJECT_DIR/build"
+
+      - name: Importar proyecto
+        run: godot --headless --editor --path "$PROJECT_DIR" --quit
+
+      - name: Generar APK
+        run: |
+          godot --headless --path "$PROJECT_DIR" --export-debug "Android" "$PROJECT_DIR/build/CiudadLibre.apk"
+
+      - name: Guardar APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: CiudadLibre-APK
+          path: ${{ env.PROJECT_DIR }}/build/CiudadLibre.apk
