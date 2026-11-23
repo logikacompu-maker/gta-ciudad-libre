@@ -1,5 +1,4 @@
 
-
 name: Crear APK Android
 
 on:
@@ -23,11 +22,14 @@ jobs:
           java-version: '17'
 
       - name: Preparar Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
+          packages: ''
 
       - name: Instalar herramientas Android
         run: |
-          yes | sdkmanager --licenses || true
           sdkmanager --install \
             "platform-tools" \
             "platforms;android-35" \
@@ -40,24 +42,30 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y unzip curl libfontconfig1
 
-          mkdir -p godot
-          cd godot
+          mkdir -p "$GITHUB_WORKSPACE/godot"
+          cd "$GITHUB_WORKSPACE/godot"
 
-          curl -L -o godot.zip \
+          curl -fL -o godot.zip \
             https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
 
           unzip -q godot.zip
+
           chmod +x Godot_v4.7.2-stable_linux.x86_64
 
-          echo "$GITHUB_WORKSPACE/godot" >> $GITHUB_PATH
+          ln -sf "$GITHUB_WORKSPACE/godot/Godot_v4.7.2-stable_linux.x86_64" \
+            "$GITHUB_WORKSPACE/godot/godot"
+
+          echo "$GITHUB_WORKSPACE/godot" >> "$GITHUB_PATH"
+
+          godot --version
 
       - name: Instalar plantillas Android
         run: |
-          curl -L -o templates.tpz \
+          curl -fL -o templates.tpz \
             https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_export_templates.tpz
 
-          mkdir -p "$HOME/.local/share/godot/export_templates/4.7.2.stable"
           mkdir -p /tmp/godot-templates
+          mkdir -p "$HOME/.local/share/godot/export_templates/4.7.2.stable"
 
           unzip -q templates.tpz -d /tmp/godot-templates
 
@@ -70,21 +78,25 @@ jobs:
       - name: Descargar y preparar juego
         run: |
           mkdir -p extracted
+
           unzip -q CiudadLibre_Proyecto_v02.zip -d extracted
 
-          PROJECT_FILE=$(find extracted -name project.godot | head -n 1)
+          PROJECT_FILE=$(find extracted -type f -name project.godot -print -quit)
 
           if [ -z "$PROJECT_FILE" ]; then
-            echo "No se encontró project.godot"
+            echo "ERROR: No se encontró project.godot"
             exit 1
           fi
 
           PROJECT_DIR=$(dirname "$PROJECT_FILE")
-          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
 
-          sed -i '/physical_keycode=_SHIFT/d' "$PROJECT_FILE"
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+          sed -i '/physical_keycode=.*SHFT/d' "$PROJECT_FILE"
 
           mkdir -p "$PROJECT_DIR/build"
+
+          echo "Proyecto encontrado: $PROJECT_DIR"
 
       - name: Configurar Android
         run: |
@@ -125,15 +137,23 @@ jobs:
 
       - name: Importar proyecto
         run: |
-          godot --headless --editor --path "$PROJECT_DIR" --quit
+          godot --headless --editor \
+            --path "$PROJECT_DIR" \
+            --quit
 
       - name: Generar APK
         run: |
-          godot --headless --path "$PROJECT_DIR" \
+          godot --headless \
+            --path "$PROJECT_DIR" \
             --export-debug "Android" \
             "$PROJECT_DIR/build/CiudadLibre.apk"
 
-          test -f "$PROJECT_DIR/build/CiudadLibre.apk"
+          if [ ! -f "$PROJECT_DIR/build/CiudadLibre.apk" ]; then
+            echo "ERROR: No se pudo generar el APK"
+            exit 1
+          fi
+
+          echo "APK GENERADO CORRECTAMENTE"
 
       - name: Guardar APK
         uses: actions/upload-artifact@v4
