@@ -23,7 +23,7 @@ jobs:
           PROJECT_FILE=$(find extracted -name project.godot | head -n 1)
           PROJECT_DIR=$(dirname "$PROJECT_FILE")
           echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
-
+          sed -i '/_SHFT/d' "$PROJECT_FILE"
       - name: Configurar exportación Android
         run: |
           cat > "$PROJECT_DIR/export_presets.cfg" <<'EOF'
